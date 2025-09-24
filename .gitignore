@@ -1,0 +1,30 @@
+# Terraform state files
+*.tfstate
+*.tfstate.backup
+
+# Terraform directories
+.terraform/
+
+# Crash logs
+crash.log
+
+# SSH keys (אם יש)
+*.pem
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# IDE / Editor
+*.vscode/
+*.idea/
+*.swp
+
+
+*.tfstate
+*.tfstate.backup
+.terraform/
+prod/
