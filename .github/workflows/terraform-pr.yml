@@ -1,0 +1,31 @@
+name: Terraform PR Workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.7.6
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Init
+        working-directory: ./prod
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: ./prod
+        run: terraform plan -input=false
