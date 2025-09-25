@@ -58,23 +58,27 @@ jobs:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
+
+      # חשוב: bootstrap בלי backend "s3" בקוד → state מקומי
       - name: Terraform Init (local state)
         run: terraform init -upgrade
         working-directory: bootstrap
+
       - name: Terraform Plan
         run: |
           terraform plan -input=false \
             -var="region=${{ secrets.AWS_REGION }}" \
-            -var="state_bucket=${{ vars.TFSTATE_BUCKET }}" \
-            -var="locks_table=${{ vars.TF_LOCKS_TABLE }}"
+            -var="bucket_name=${{ vars.TFSTATE_BUCKET }}" \
+            -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
         working-directory: bootstrap
+
       - name: Terraform Apply (manual only)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.bootstrap_apply == 'true'
         run: |
           terraform apply -auto-approve \
             -var="region=${{ secrets.AWS_REGION }}" \
-            -var="state_bucket=${{ vars.TFSTATE_BUCKET }}" \
-            -var="locks_table=${{ vars.TF_LOCKS_TABLE }}"
+            -var="bucket_name=${{ vars.TFSTATE_BUCKET }}" \
+            -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
         working-directory: bootstrap
 
   prod:
@@ -93,6 +97,8 @@ jobs:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
+
+      # prod משתמש ב-backend S3 שנוצר ב-bootstrap → מזריקים דרך init
       - name: Terraform Init (remote backend)
         run: |
           terraform init \
@@ -102,15 +108,18 @@ jobs:
             -backend-config="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}" \
             -upgrade
         working-directory: prod
+
       - name: Terraform Validate
         run: terraform validate
         working-directory: prod
+
       - name: Terraform Plan
         run: |
           terraform plan -input=false \
             -var="region=${{ secrets.AWS_REGION }}" \
             -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
+
       - name: Terraform Apply (push to main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
