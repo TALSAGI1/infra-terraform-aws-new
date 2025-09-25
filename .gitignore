@@ -24,6 +24,9 @@ Desktop.ini
 *.swp
 
 
+
+
 *.tfstate
 *.tfstate.backup
 .terraform/
+prod/
