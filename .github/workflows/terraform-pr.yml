@@ -22,6 +22,10 @@ on:
         description: "Run terraform apply for bootstrap? (true/false)"
         required: false
         default: "false"
+      prod_apply:               
+        description: "Run terraform apply for prod? (true/false)"
+        required: false
+        default: "false"
 
 jobs:
   detect:
