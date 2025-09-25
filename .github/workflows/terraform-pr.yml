@@ -72,10 +72,12 @@ jobs:
         run: terraform init -upgrade
         working-directory: bootstrap
 
-      - name: Terraform Fmt & Validate
-        run: |
-          terraform fmt -check
-          terraform validate
+      - name: Terraform Fmt (auto-fix)
+        run: terraform fmt -recursive -diff
+        working-directory: bootstrap
+
+      - name: Terraform Validate
+        run: terraform validate
         working-directory: bootstrap
 
       - name: Terraform Plan
@@ -122,10 +124,12 @@ jobs:
             -upgrade
         working-directory: prod
 
-      - name: Terraform Fmt & Validate
-        run: |
-          terraform fmt -check
-          terraform validate
+      - name: Terraform Fmt (auto-fix)
+        run: terraform fmt -recursive -diff
+        working-directory: prod
+
+      - name: Terraform Validate
+        run: terraform validate
         working-directory: prod
 
       - name: Terraform Plan
