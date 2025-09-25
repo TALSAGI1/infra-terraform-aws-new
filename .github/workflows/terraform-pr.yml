@@ -1,45 +1,120 @@
-name: Terraform CI/CD
+name: Terraform (bootstrap + prod)
 
 on:
   push:
-    branches:
-  
-      - main   # מפעיל את ה־workflow רק כשיש push ל־main
+    branches: [ "main" ]
+    paths:
+      - "bootstrap/**"
+      - "prod/**"
+      - "modules/**"
   pull_request:
+    branches: [ "main" ]
+    paths:
+      - "prod/**"
+      - "modules/**"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which part to run? (bootstrap/prod/both)"
+        required: false
+        default: "both"
+      bootstrap_apply:
+        description: "Run terraform apply for bootstrap? (true/false)"
+        required: false
+        default: "false"
 
 jobs:
-  terraform:
+  detect:
+    name: Detect changes
     runs-on: ubuntu-latest
-
+    outputs:
+      bootstrap: ${{ steps.filter.outputs.bootstrap }}
+      prod:      ${{ steps.filter.outputs.prod }}
     steps:
-      # שלב 1 – משיכת הקוד מהריפו
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      # שלב 2 – התקנת Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-
-      # שלב 3 – קונפיגורציה של AWS Credentials
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          filters: |
+            bootstrap:
+              - 'bootstrap/**'
+            prod:
+              - 'prod/**'
+              - 'modules/**'
+
+  bootstrap:
+    name: Bootstrap (S3 + DynamoDB)
+    needs: detect
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'bootstrap' || github.event.inputs.target == 'both'))
+      || (github.event_name != 'workflow_dispatch' && needs.detect.outputs.bootstrap == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.6.6 }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+      - name: Terraform Init (local state)
+        run: terraform init -upgrade
+        working-directory: bootstrap
+      - name: Terraform Plan
+        run: |
+          terraform plan -input=false \
+            -var="region=${{ secrets.AWS_REGION }}" \
+            -var="state_bucket=${{ vars.TFSTATE_BUCKET }}" \
+            -var="locks_table=${{ vars.TF_LOCKS_TABLE }}"
+        working-directory: bootstrap
+      - name: Terraform Apply (manual only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bootstrap_apply == 'true'
+        run: |
+          terraform apply -auto-approve \
+            -var="region=${{ secrets.AWS_REGION }}" \
+            -var="state_bucket=${{ vars.TFSTATE_BUCKET }}" \
+            -var="locks_table=${{ vars.TF_LOCKS_TABLE }}"
+        working-directory: bootstrap
 
-      # שלב 4 – Terraform init
-      - name: Terraform Init
-        run: terraform init
-
-      # שלב 5 – Terraform validate
+  prod:
+    name: Prod (module deploy)
+    needs: detect
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'prod' || github.event.inputs.target == 'both'))
+      || (github.event_name != 'workflow_dispatch' && needs.detect.outputs.prod == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.6.6 }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+      - name: Terraform Init (remote backend)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}" \
+            -backend-config="key=prod/infra.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}" \
+            -upgrade
+        working-directory: prod
       - name: Terraform Validate
         run: terraform validate
-
-      # שלב 6 – Terraform plan
+        working-directory: prod
       - name: Terraform Plan
-        run: terraform plan
-
-      # שלב 7 – Terraform apply (רק אם את רוצה אוטומציה מלאה)
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: |
+          terraform plan -input=false \
+            -var="region=${{ secrets.AWS_REGION }}" \
+            -var="key_name=${{ vars.KEY_NAME }}"
+        working-directory: prod
+      - name: Terraform Apply (push to main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          terraform apply -auto-approve \
+            -var="region=${{ secrets.AWS_REGION }}" \
+            -var="key_name=${{ vars.KEY_NAME }}"
+        working-directory: prod
