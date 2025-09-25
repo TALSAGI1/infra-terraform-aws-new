@@ -1,12 +1,11 @@
 # --- VPC ---
 module "vpc" {
-  source         = "../modules/vpc"      # עדכני אם שם התיקייה שונה
+  source         = "../modules/vpc"  # עדכני אם שם התיקייה שונה
   cidr           = var.vpc_cidr
-  name           = "prod-vpc"            # תגית/שם כללי; אפשר גם להפוך ל-var עם default
+  name           = "prod-vpc"        # תגית/שם כללי; אפשר גם להפוך ל-var עם default
   public_subnets = var.public_subnets
   azs            = var.azs
 }
-
 
 # --- SG ---
 module "sg" {
@@ -41,7 +40,7 @@ module "ec2" {
 
   # אם ה-VPC מחזיר רשימה של סאבנטים ציבוריים:
   subnet_id = module.vpc.public_subnet_ids[0]
-  # ואם בחרת output יחיד public_subnet_id – השתמשי בו במקום:
+  # אם במקום זאת הגדרת output יחיד:
   # subnet_id = module.vpc.public_subnet_id
 
   sg_id = module.sg.sg_id
