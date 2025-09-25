@@ -81,7 +81,7 @@ jobs:
             -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
         working-directory: bootstrap
 
-   prod:
+  prod:
     name: Prod (module deploy)
     needs: detect
     if: |
