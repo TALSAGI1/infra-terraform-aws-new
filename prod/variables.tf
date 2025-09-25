@@ -15,4 +15,5 @@ type = string
 default = "t3.micro"
 }
 variable "key_name"       { 
-type = string }  # שם ה-KeyPair שקיים ב-EC2
+type = string
+}  # שם ה-KeyPair שקיים ב-EC2
