@@ -123,10 +123,13 @@ jobs:
             # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
 
-      - name: Terraform Apply (push to main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          terraform apply -auto-approve \
-            -var="region=${{ secrets.AWS_REGION }}"
+      - name: Terraform Apply (prod)
+        if: |
+         (github.event_name == 'push' && github.ref == 'refs/heads/main')
+         || (github.event_name == 'workflow_dispatch' && github.event.inputs.prod_apply == 'true')
+    run: |
+      terraform apply -auto-approve \
+        -var="region=${{ secrets.AWS_REGION }}"
+    working-directory: prod
             # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
