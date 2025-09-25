@@ -4,6 +4,7 @@ on:
   push:
     branches: [ "main" ]
     paths:
+      - ".github/workflows/**"   # שינוי בקובץ ה־workflow יטריג ריצה
       - "bootstrap/**"
       - "prod/**"
       - "modules/**"
@@ -22,7 +23,7 @@ on:
         description: "Run terraform apply for bootstrap? (true/false)"
         required: false
         default: "false"
-      prod_apply:               
+      prod_apply:
         description: "Run terraform apply for prod? (true/false)"
         required: false
         default: "false"
@@ -55,22 +56,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: 1.6.6 }
+        with:
+          terraform_version: 1.6.6
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
 
-      # חשוב: bootstrap בלי backend "s3" בקוד → state מקומי
+      # bootstrap עובד עם state מקומי (אין backend "s3" בקוד)
       - name: Terraform Init (local state)
         run: terraform init -upgrade
         working-directory: bootstrap
 
+      - name: Terraform Fmt & Validate
+        run: |
+          terraform fmt -check
+          terraform validate
+        working-directory: bootstrap
+
       - name: Terraform Plan
         run: |
-          terraform plan -input=false \
+          terraform plan -input=false -out=tfplan \
             -var="region=${{ secrets.AWS_REGION }}" \
             -var="bucket_name=${{ vars.TFSTATE_BUCKET }}" \
             -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
@@ -78,14 +88,10 @@ jobs:
 
       - name: Terraform Apply (manual only)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.bootstrap_apply == 'true'
-        run: |
-          terraform apply -auto-approve \
-            -var="region=${{ secrets.AWS_REGION }}" \
-            -var="bucket_name=${{ vars.TFSTATE_BUCKET }}" \
-            -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
+        run: terraform apply -auto-approve tfplan
         working-directory: bootstrap
 
-   prod:
+  prod:
     name: Prod (module deploy)
     needs: detect
     if: |
@@ -94,14 +100,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: 1.6.6 }
+        with:
+          terraform_version: 1.6.6
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
 
+      # prod משתמש ב-backend S3 שנוצר ב-bootstrap
       - name: Terraform Init (remote backend)
         run: |
           terraform init \
@@ -112,8 +122,10 @@ jobs:
             -upgrade
         working-directory: prod
 
-      - name: Terraform Validate
-        run: terraform validate
+      - name: Terraform Fmt & Validate
+        run: |
+          terraform fmt -check
+          terraform validate
         working-directory: prod
 
       - name: Terraform Plan
