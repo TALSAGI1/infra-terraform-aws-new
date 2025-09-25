@@ -81,7 +81,7 @@ jobs:
             -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
         working-directory: bootstrap
 
-  prod:
+   prod:
     name: Prod (module deploy)
     needs: detect
     if: |
@@ -98,7 +98,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
 
-      # prod משתמש ב-backend S3 שנוצר ב-bootstrap → מזריקים דרך init
       - name: Terraform Init (remote backend)
         run: |
           terraform init \
@@ -116,14 +115,14 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan -input=false \
-            -var="region=${{ secrets.AWS_REGION }}" \
-            -var="key_name=${{ vars.KEY_NAME }}"
+            -var="region=${{ secrets.AWS_REGION }}"
+            # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
 
       - name: Terraform Apply (push to main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           terraform apply -auto-approve \
-            -var="region=${{ secrets.AWS_REGION }}" \
-            -var="key_name=${{ vars.KEY_NAME }}"
+            -var="region=${{ secrets.AWS_REGION }}"
+            # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
