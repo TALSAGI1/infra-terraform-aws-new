@@ -20,4 +20,4 @@ resource "aws_security_group" "this" {
   tags = { Name = var.name }
 }
 
-output "sg_id" { value = aws_security_group.this.id }
+
