@@ -1,23 +1,41 @@
-# VPC
+# --- VPC ---
 module "vpc" {
-  source   = "../modules/vpc"   # עדכני לשם המדויק אם שונה
-  vpc_cidr = var.vpc_cidr
+  source         = "../modules/vpc"      # עדכני אם שם התיקייה שונה
+  cidr           = var.vpc_cidr
+  name           = "prod-vpc"            # תגית/שם כללי; אפשר גם להפוך ל-var עם default
+  public_subnets = var.public_subnets
+  azs            = var.azs
 }
 
-# Security Groups
+# --- SG ---
 module "sg" {
-  source = "../modules/sg"      # עדכני לשם המדויק אם שונה
-  # דוגמה: תני למודול את ה-VPC id אם הוא צריך
-  vpc_id = module.vpc.vpc_id    # רק אם המודול שלך אכן חושף output בשם הזה
+  source        = "../modules/sg"
+  vpc_id        = module.vpc.vpc_id      # מגיע מה-output של vpc
+  name          = "prod-sg"              # תגית; לא ID
+  allowed_ports = var.allowed_ports
 }
 
-# EC2
+# --- AMI דינמית (Amazon Linux 2023, x86_64) ---
+data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter { name = "name"         values = ["al2023-ami-*-x86_64"] }
+  filter { name = "architecture" values = ["x86_64"] }
+}
+
+# --- EC2 ---
 module "ec2" {
-  source        = "../modules/ec2"  # עדכני לשם המדויק אם שונה
-  key_name      = var.key_name
+  source        = "../modules/ec2"
+  name          = var.name
+  ami           = data.aws_ami.al2023.id
   instance_type = var.instance_type
-  # דוגמה: תני subnet/sg מהמודולים הקודמים אם המודול ec2 צריך אותם
-  # subnet_id     = module.vpc.public_subnet_ids[0]
-  # security_group_ids = [ module.sg.web_sg_id ]
+
+  # אם ה-VPC מחזיר רשימה של סאבנטים ציבוריים:
+  subnet_id = module.vpc.public_subnet_ids[0]
+  # ואם בחרת output יחיד public_subnet_id – השתמשי בו במקום:
+  # subnet_id = module.vpc.public_subnet_id
+
+  sg_id = module.sg.sg_id
+
   depends_on = [module.vpc, module.sg]
 }
