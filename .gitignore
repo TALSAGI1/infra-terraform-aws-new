@@ -23,10 +23,6 @@ Desktop.ini
 *.idea/
 *.swp
 
-
-
-
 *.tfstate
 *.tfstate.backup
 .terraform/
-prod/
