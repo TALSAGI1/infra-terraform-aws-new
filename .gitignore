@@ -27,4 +27,3 @@ Desktop.ini
 *.tfstate
 *.tfstate.backup
 .terraform/
-prod/
