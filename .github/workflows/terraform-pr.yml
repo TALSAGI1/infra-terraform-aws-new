@@ -85,7 +85,7 @@ jobs:
             -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
         working-directory: bootstrap
 
-  prod:
+   prod:
     name: Prod (module deploy)
     needs: detect
     if: |
@@ -118,18 +118,13 @@ jobs:
 
       - name: Terraform Plan
         run: |
-          terraform plan -input=false \
+          terraform plan -input=false -out=tfplan \
             -var="region=${{ secrets.AWS_REGION }}"
-            # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
         working-directory: prod
 
       - name: Terraform Apply (prod)
         if: |
-         (github.event_name == 'push' && github.ref == 'refs/heads/main')
-         || (github.event_name == 'workflow_dispatch' && github.event.inputs.prod_apply == 'true')
-    run: |
-      terraform apply -auto-approve \
-        -var="region=${{ secrets.AWS_REGION }}"
-    working-directory: prod
-            # הוסר: -var="key_name=${{ vars.KEY_NAME }}"
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.prod_apply == 'true')
+        run: terraform apply -auto-approve tfplan
         working-directory: prod
