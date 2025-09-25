@@ -144,3 +144,88 @@ jobs:
           (github.event_name == 'workflow_dispatch' && github.event.inputs.prod_apply == 'true')
         run: terraform apply -auto-approve tfplan
         working-directory: prod
+
+          destroy_prod:
+    name: Destroy PROD (VPC/SG/EC2)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prod' && github.event.inputs.prod_apply == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      # ודאי שהאינפוט confirm הוא בדיוק DESTROY
+      - name: Guard – require confirm=DESTROY
+        if: github.event.inputs.confirm != 'DESTROY'
+        run: |
+          echo "Refusing to destroy. Provide confirm=DESTROY."
+          exit 1
+
+      - name: Terraform Init (remote backend)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}" \
+            -backend-config="key=prod/infra.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}" \
+            -upgrade
+        working-directory: prod
+
+      - name: Terraform Plan (destroy)
+        run: |
+          terraform plan -destroy -input=false -out=tfplan.destroy \
+            -var="region=${{ secrets.AWS_REGION }}"
+        working-directory: prod
+
+      - name: Terraform Destroy (apply plan)
+        run: terraform apply -auto-approve tfplan.destroy
+        working-directory: prod
+
+  destroy_bootstrap:
+    name: Destroy BOOTSTRAP (S3 + DynamoDB)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'bootstrap' && github.event.inputs.bootstrap_apply == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      - name: Guard – require confirm=DESTROY
+        if: github.event.inputs.confirm != 'DESTROY'
+        run: |
+          echo "Refusing to destroy. Provide confirm=DESTROY."
+          exit 1
+
+      # חשוב: לרוקן את ה-bucket לפני destroy (אחרת terraform יתקע)
+      - name: Empty S3 bucket (state)
+        run: |
+          aws s3 rm "s3://${{ vars.TFSTATE_BUCKET }}" --recursive || true
+
+      - name: Terraform Init (local state)
+        run: terraform init -upgrade
+        working-directory: bootstrap
+
+      - name: Terraform Plan (destroy)
+        run: |
+          terraform plan -destroy -input=false -out=tfplan.destroy \
+            -var="region=${{ secrets.AWS_REGION }}" \
+            -var="bucket_name=${{ vars.TFSTATE_BUCKET }}" \
+            -var="dynamodb_table=${{ vars.TF_LOCKS_TABLE }}"
+        working-directory: bootstrap
+
+      - name: Terraform Destroy (apply plan)
+        run: terraform apply -auto-approve tfplan.destroy
+        working-directory: bootstrap
+
